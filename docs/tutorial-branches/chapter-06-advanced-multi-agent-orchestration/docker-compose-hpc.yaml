@@ -1,0 +1,117 @@
+# EXPERIMENTAL: docker-compose-hpc.yml
+# version: '3.8' # Specify a modern version
+
+services:
+  mcp_server_v2:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp_server # Use the Dockerfile for MCP server
+    container_name: agentic_mcp_server_v2
+    ports:
+      - "8080:8080" # Map host port 8080 to container port 8080
+    volumes:
+      - ./data:/app/data # Persist SQLite DB and other data for MCP server
+      - shared_uploads:/app/data/uploaded_files # Shared volume for CSVs
+    environment:
+      # Define any necessary environment variables for the MCP server
+      # e.g., OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.
+      # These can be sourced from a.env file at the root of the project
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - AZURE_API_KEY=${AZURE_API_KEY}
+      - AZURE_API_BASE=${AZURE_API_BASE}
+      - AZURE_API_VERSION=${AZURE_API_VERSION} # Often required by LiteLLM for Azure
+      - VERTEXAI_PROJECT=${VERTEXAI_PROJECT}
+      - VERTEXAI_LOCATION=${VERTEXAI_LOCATION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION_NAME=${AWS_REGION_NAME}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - OLLAMA_API_BASE=${OLLAMA_API_BASE} # e.g., http://host.docker.internal:11434 if Ollama runs on host
+    restart: unless-stopped
+    networks:
+      - agentic_network_v2
+
+  streamlit_app_v2:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit_app # Use the Dockerfile for Streamlit app
+    container_name: agentic_streamlit_app_v2
+    ports:
+      - "8501:8501" # Map host port 8501 to container port 8501
+    volumes:
+      - ./data:/app/data # Persist ChromaDB and other data for MCP server
+      - shared_uploads:/app/data/uploaded_files # Shared volume for CSVs
+      # For development, you might want to mount your source code for hot-reloading
+      # -./src/agentic_framework_pkg/streamlit_app:/app/src/agentic_framework_pkg/streamlit_app
+    environment:
+      # Critical: Tell Streamlit app how to reach the MCP server
+      - USE_LOCAL_MCP=False
+      - MCP_SERVER_URL=http://mcp_server:8080/mcp # Uses service name 'mcp_server'
+      # Explicitly set the URL for Langchain tools running within Streamlit app
+      - MCP_SERVER_URL_FOR_LANGCHAIN=http://mcp_server:8080/mcp
+            # Other env vars for Streamlit if needed
+      - HPC_MCP_SERVER_URL=http://hpc_mcp_server:8081 # URL for HPC MCP server
+    depends_on:
+      - mcp_server_v2 # Optional: ensures mcp_server starts before streamlit_app
+      - hpc_mcp_server # Optional: ensures HPC MCP server starts before streamlit_app
+    restart: unless-stopped
+    networks:
+      - agentic_network_v2
+
+  hpc_mcp_server:
+    build:
+      context: . # Assuming Dockerfile.hpc is at the root of the context
+      dockerfile: Dockerfile.hpc
+    container_name: agentic_hpc_mcp_server
+    ports:
+      - "${HPC_MCP_SERVER_PORT:-8081}:8081" # Exposes port 8081 by default
+    env_file:
+      - .env # Loads environment variables from .env file at the project root
+    environment:
+      - HPC_MCP_SERVER_PORT=${HPC_MCP_SERVER_PORT:-8081}
+      - LOGGING_LEVEL=${LOGGING_LEVEL:-INFO} # Consistent logging level
+      - MCP_SERVER_URL_FOR_LANGCHAIN=http://mcp_server:8080/mcp
+      - HPC_MCP_SERVER_URL_FOR_LANGCHAIN=http://mcp_server:8080/mcp # Set the exact var name used by mcp_langchain_tools.py; but point to the othe MCP server that hosts the RAG tools
+      # LLM Credentials for summarization within HPC server's video tool
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - AZURE_API_KEY=${AZURE_API_KEY}
+      - AZURE_API_BASE=${AZURE_API_BASE}
+      - AZURE_API_VERSION=${AZURE_API_VERSION}
+      - VERTEXAI_PROJECT=${VERTEXAI_PROJECT}
+      - VERTEXAI_LOCATION=${VERTEXAI_LOCATION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION_NAME=${AWS_REGION_NAME}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - OLLAMA_API_BASE=${OLLAMA_API_BASE} # e.g., http://host.docker.internal:11434
+      # NEXTFLOW_BLAST_SCRIPT_PATH is set in Dockerfile.hpc
+      # BLASTDB: If your BLAST+ installation requires the BLASTDB environment variable
+      - BLASTDB=/blast_databases
+    volumes:
+      # Mount your BLAST databases into the container.
+      # The path /blast_databases inside the container should be where BLAST+ expects to find them.
+      - ./blast_databases:/blast_databases # Mounts a local 'blast_databases' directory from project root
+      - shared_uploads:/app/data/uploaded_files # Shared volume for video uploads from Streamlit
+      # Note: This will be used for the RAG tools in the HPC server
+      - ./data:/app/data # Persist ChromaDB and other data for MCP server
+    networks:
+      - agentic_network_v2
+    restart: unless-stopped
+    # depends_on: # Add if it needs other services to be up first, e.g. a shared database
+    #   - mcp_server # Example if it needed to communicate with the main mcp_server
+
+# Shared volumes for file uploads
+# This file defines the services for the Agentic MCP server and Streamlit app
+# and sets up a shared volume for file uploads.
+volumes:
+  shared_uploads: # 1. Define a named volume
+    driver: local # Use the local driver for simplicity
+  data: # 2. Define a named volume for MCP server data
+    driver: local # Use the local driver for simplicity
+
+# Define a custom bridge network for better isolation and communication 
+networks:
+  agentic_network_v2: # Defines a custom bridge network
+    driver: bridge

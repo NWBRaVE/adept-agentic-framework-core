@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  ollama:
+    platform: linux/amd64
+    image: ollama/ollama:latest
+    container_name: ollama_ch00
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - agentic_network_ch00
+
+  mcp_server:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: mcp_server
+    container_name: agentic_mcp_server_ch00
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - shared_uploads:/app/data/uploaded_files
+    env_file:
+      - ./.env
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OLLAMA_API_BASE_URL=http://ollama_ch00:11434
+    depends_on:
+      - ollama
+    restart: unless-stopped
+    networks:
+      - agentic_network_ch00
+
+  streamlit_app:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: streamlit_app
+    container_name: agentic_streamlit_app_ch00
+    ports:
+      - "8501:8501"
+    volumes:
+      - shared_uploads:/app/data/uploaded_files
+    env_file:
+      - ./.env
+    environment:
+      - MCP_SERVER_URL=http://agentic_mcp_server_ch00:8080/mcp
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - STREAMLIT_ENABLE_SSL=true
+      - OLLAMA_API_BASE_URL=http://ollama_ch00:11434
+    depends_on:
+      - mcp_server
+    restart: unless-stopped
+    networks:
+      - agentic_network_ch00
+
+  jupyterlab:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile.jupyterlab
+    container_name: agentic_jupyterlab_ch00
+    user: "${UID}:${GID}"  # from .env
+    working_dir: /home/jovyan/work
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./data:/home/jovyan/work/data
+      - ./notebooks:/home/jovyan/work/notebooks
+      - shared_uploads:/home/jovyan/work/data/uploaded_files
+    env_file:
+      - ./.env
+    environment:
+      - MCP_SERVER_URL=http://agentic_mcp_server_ch00:8080/mcp
+    depends_on:
+      - mcp_server
+    restart: unless-stopped
+    networks:
+      - agentic_network_ch00
+
+
+volumes:
+  shared_uploads:
+    driver: local
+  ollama_data: {}
+
+networks:
+  agentic_network_ch00:
+    driver: bridge
+

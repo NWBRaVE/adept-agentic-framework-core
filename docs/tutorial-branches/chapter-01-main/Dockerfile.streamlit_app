@@ -1,0 +1,104 @@
+# streamlit_app.Dockerfile
+# Stage 1: Builder
+FROM python:3.11-slim AS builder
+
+# Create the non-root user and group in the final stage
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+
+# Explicitly set HOME for the appuser to a writable directory, make user permission sticky
+ENV HOME=/app
+RUN mkdir -p ${HOME} && chown -R appuser:appgroup ${HOME} && chmod g+s ${HOME}
+WORKDIR ${HOME}
+
+# Install build essentials needed for some dependencies (like gemmi)
+# Create a non-root user and group.
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+
+# Attempt to fix GPG errors by robustly reinstalling keyring and related packages
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    # Step 1: Initial update to populate package lists, tolerating GPG issues and old metadata
+    apt-get update \
+        -o Acquire::Check-Date=false \
+        -o Acquire::Check-Valid-Until=false \
+        -o Acquire::AllowInsecureRepositories=true \
+        -o Acquire::AllowDowngradeToInsecureRepositories=true && \
+    # Step 2: Install/Reinstall essential packages for secure apt operation, allowing unauthenticated install
+    apt-get install -y --no-install-recommends --allow-unauthenticated --reinstall \
+        ca-certificates \
+        debian-archive-keyring \
+        gnupg \
+        apt-transport-https && \
+    # Step 3: Clean up apt's state thoroughly before attempting a secure update
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    # Step 4: Perform a secure update. With updated keyring and CAs, this should succeed.
+    apt-get update && \
+    # Step 5: Install desired packages
+    apt-get install -y --no-install-recommends build-essential && \
+    # Step 6: Final cleanup of apt cache
+    rm -rf /var/lib/apt/lists/*
+
+
+# Copy only necessary files for dependency installation to leverage Docker cache
+COPY pyproject.toml uv.lock* .env ./
+COPY src/ ./src/
+
+# Increase HTTP timeout for uv to handle slower network or larger packages
+ENV UV_HTTP_TIMEOUT=300
+
+# Install uv and create a virtual environment.
+RUN pip install --no-cache-dir uv  
+RUN uv venv -p 3.11 && uv pip install --no-cache-dir --editable .
+
+
+# Stage 2: Final image
+FROM python:3.11-slim AS final
+
+# Create the non-root user and group in the final stage
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+
+# Explicitly set HOME for the appuser to a writable directory, make user permission sticky
+ENV HOME=/app
+RUN mkdir -p ${HOME} && chown -R appuser:appgroup ${HOME} && chmod g+s ${HOME}
+WORKDIR ${HOME}
+
+
+# Copy the uv executables and other necessary files from the builder stage
+COPY --from=builder /app/.venv ./.venv/
+# Copy the uv executable from the builder stage to a directory on PATH in the final stage
+COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
+# Copy any other necessary binaries/scripts installed by pip (e.g., streamlit CLI)
+#COPY --from=builder /usr/local/bin/ /usr/local/bin/
+COPY --from=builder /app/src/ ./src/
+COPY --from=builder /app/pyproject.toml ./pyproject.toml
+COPY --from=builder /app/.env ./.env
+# Copy the uv.lock if it exists, otherwise uv will resolve dependencies from pyproject.toml
+COPY --from=builder /app/uv.lock* ./
+
+
+# Ensure data/temp_uploads directory exists for file uploads (will be volume-mounted) and set ownership
+RUN mkdir -p /app/data/temp_uploads 
+
+# Set UV_CACHE_DIR for the appuser at runtime.
+# This directory will be created and owned by appuser if it needs to write to it.
+# Using /tmp ensures it's generally writable and suitable for cache.
+ENV UV_CACHE_DIR=/tmp/.uv_cache_appuser_runtime
+RUN mkdir -p ${UV_CACHE_DIR} && chown -R appuser:appgroup ${UV_CACHE_DIR}
+
+# Change ownership of the /app directory to appuser:appgroup
+RUN chown -R appuser:appgroup ${HOME}
+
+# Set the user to appuser for running the application
+USER appuser
+WORKDIR ${HOME}
+
+# Use appuser for running the application
+# Expose Streamlit's default port
+EXPOSE 8501
+
+# Command to run the Streamlit app using the uv executable from PATH
+# Assumes 'run-streamlit-harness' is defined in pyproject.toml
+# e.g., "run-streamlit-harness = "agentic_framework_pkg.streamlit_app.main:start_harness""
+# or directly: streamlit run src/agentic_framework_pkg/streamlit_app/app.py --server.port=8501 --server.address=0.0.0.0
+CMD ["uv", "run", "run-streamlit-harness"]

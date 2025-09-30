@@ -1,0 +1,90 @@
+# Use the official Python image as a parent image
+FROM python:3.11-slim
+
+# Create the non-root user and group in the final stage
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+
+# Explicitly set HOME for the appuser to a writable directory, make user permission sticky
+ENV HOME=/app
+RUN mkdir -p ${HOME} && chown -R appuser:appgroup ${HOME} && chmod a+s ${HOME}
+WORKDIR ${HOME}
+
+
+# Set environment variables to prevent Python from writing pyc files to disc and buffering stdout
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# Install system dependencies required for llm-sandbox (nsjail) and other tools
+# build-essential is needed for some pip packages that compile C code.
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential git docker.io && \
+    apt-get clean && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install uv, the package manager
+RUN pip install uv
+
+# Install dependencies using uv, including llm-sandbox
+RUN uv venv .venv 
+
+# Copy the requirements file into the container at /app
+COPY pyproject.toml pyproject.toml
+COPY uv.lock uv.lock
+COPY .env .env
+
+# Copy the application source code into the container
+COPY src/ /app/src/
+
+RUN . .venv/bin/activate 
+
+# Let's try pinning numpy to a version that satisfies '2.2 or less'
+RUN uv pip install --no-cache-dir "numpy==2.2.6"
+RUN uv sync --all-extras 
+#RUN uv pip compile pyproject.toml --all-extras -o requirements.lock
+RUN uv pip install --no-cache-dir --editable .
+#RUN uv pip install llm-sandbox llm-sandbox[docker] # Redundant since llm-sandbox is already in pyproject.toml
+RUN uv run python -c "import llm_sandbox; print('llm-sandbox installed successfully')"
+
+# Install the whisper package if it's not already covered by pyproject.toml or extras
+# It's good practice to ensure it's there before trying to download models.
+#RUN . .venv/bin/activate && uv pip install --no-cache-dir openai-whisper
+# Use git to install the latest version of whisper directly from the repository
+#RUN . .venv/bin/activate && uv pip install --no-cache-dir --force-reinstall numpy==2.2.6 numba git+https://github.com/openai/whisper.git@v20250625#egg=openai-whisper 
+
+# Define the directory where Whisper models are stored
+# By default, whisper downloads models to ~/.cache/whisper/
+# We can set the XDG_CACHE_HOME environment variable to control this location,
+# ensuring it's within our /app directory and writable by appuser.
+#ENV XDG_CACHE_HOME=${HOME}/.cache
+
+# # Switch to the appuser for downloading models to ensure correct permissions
+# USER appuser
+
+# Create the cache directory for appuser before downloading
+#RUN mkdir -p ${XDG_CACHE_HOME}/whisper && chown -R appuser:appgroup ${HOME}/.cache
+#RUN mkdir -p ${XDG_CACHE_HOME}/whisper 
+
+# Download the 'tiny' and 'base' Whisper models
+# The `_ =` assignment is used to suppress stdout from load_model if needed
+#RUN . .venv/bin/activate && uv run python -c "import whisper; print('Downloading tiny Whisper model...'); _ = whisper.load_model('tiny'); print('Downloading base Whisper model...'); _ = whisper.load_model('base'); print('Whisper models downloaded successfully.')"
+
+# # Switch back to root temporarily if more root operations are needed, then to appuser.
+# # If no more root operations are needed, you can just keep USER appuser from here.
+# USER root
+
+# Ensure the models are accessible by appuser after downloading (whispher models are downloaded to the cache directory)
+# This might be redundant if downloaded by appuser directly, but good for safety
+# Running for all files in the cache directory to ensure permissions are correct
+# Note: This is not strictly necessary if the models are downloaded by appuser, but it's
+# a good practice to ensure all files in the cache directory are owned by appuser.
+RUN chown -R appuser:appgroup ${HOME}/.cache/ ${HOME}/src ${HOME}/.venv
+
+# Switch to the non-root user before launching the application
+USER appuser
+WORKDIR ${HOME}
+
+# Expose the port the app runs on
+EXPOSE 8082
+
+# Command to run the application
+CMD ["/bin/bash", "-c", "source .venv/bin/activate && PYTHONPATH=src uv run python -m agentic_framework_pkg.sandbox_mcp_server.main"]

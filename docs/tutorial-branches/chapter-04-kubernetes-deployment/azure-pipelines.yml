@@ -1,0 +1,84 @@
+# Azure DevOps Pipeline for Agentic Framework
+# This pipeline builds and pushes Docker images to ACR, then deploys to AKS using Helm.
+
+trigger:
+- main # Trigger the pipeline on pushes to the main branch
+
+resources:
+- repo: self
+
+variables:
+  # --- Configuration Variables ---
+  # These should be configured in the Azure DevOps UI under 'Variables' for your pipeline.
+  # Create a 'Variable group' or set them directly.
+  #
+  # azureSubscription: The name of your Azure DevOps Service Connection for Azure.
+  # resourceGroupName: The name of the resource group created by Pulumi (e.g., 'agentic-rg-xxxxxx').
+  # acrName: The name of your Azure Container Registry (e.g., 'agenticacrxxxxxx').
+  # aksClusterName: The name of your AKS cluster (e.g., 'agenticAksCluster-xxxxxx').
+  #
+  # --- Static Variables ---
+  vmImageName: 'ubuntu-latest'
+  helmReleaseName: 'my-agentic-release'
+  kubernetesNamespace: 'agentic-framework'
+
+stages:
+- stage: Build
+  displayName: Build and Push Docker Images
+  jobs:
+  - job: Build
+    displayName: Build and Push
+    pool:
+      vmImage: $(vmImageName)
+    strategy:
+      matrix:
+        mcp_server:
+          serviceName: 'mcp_server'
+        streamlit_app:
+          serviceName: 'streamlit_app'
+        hpc_mcp_server:
+          serviceName: 'hpc_mcp_server'
+        sandbox_mcp_server:
+          serviceName: 'sandbox_mcp_server'
+    steps:
+    - task: Docker@2
+      displayName: 'Build and Push $(serviceName)'
+      inputs:
+        command: buildAndPush
+        repository: 'agentic_framework-$(serviceName)'
+        dockerfile: 'Dockerfile.$(serviceName)'
+        containerRegistry: '$(azureSubscription)' # Uses the ACR associated with the service connection
+        tags: |
+          $(Build.BuildId)
+          latest
+
+- stage: Deploy
+  displayName: Deploy to AKS
+  dependsOn: Build
+  jobs:
+  - deployment: DeployToAKS
+    displayName: Deploy Helm Chart
+    pool:
+      vmImage: $(vmImageName)
+    environment: 'production' # You can create an environment in Azure DevOps for approval gates
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: HelmDeploy@0
+            displayName: 'Helm Upgrade/Install'
+            inputs:
+              connectionType: 'Azure Resource Manager'
+              azureSubscription: '$(azureSubscription)'
+              resourceGroupName: '$(resourceGroupName)'
+              kubernetesCluster: '$(aksClusterName)'
+              namespace: '$(kubernetesNamespace)'
+              command: 'upgrade'
+              chartType: 'FilePath'
+              chartPath: 'infra/helm/agentic-framework'
+              releaseName: '$(helmReleaseName)'
+              overrideValues: |
+                global.image.tag=$(Build.BuildId)
+                global.image.pullPolicy=Always
+              valueFile: 'infra/helm/agentic-framework/values-azure.yaml'
+              arguments: '--install --create-namespace --set-string global.image.repositoryPrefix=$(acrName).azurecr.io/'

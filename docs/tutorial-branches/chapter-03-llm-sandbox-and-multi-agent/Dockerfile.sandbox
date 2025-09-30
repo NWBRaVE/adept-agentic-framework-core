@@ -1,0 +1,42 @@
+# Use the official Python image as a parent image
+FROM python:3.11-slim
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Set environment variables to prevent Python from writing pyc files to disc and buffering stdout
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# Install system dependencies required for llm-sandbox (nsjail) and other tools
+# build-essential is needed for some pip packages that compile C code.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    docker.io \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv, the package manager
+RUN pip install uv
+
+# Install dependencies using uv, including llm-sandbox
+RUN uv venv .venv 
+
+# Copy the requirements file into the container at /app
+COPY pyproject.toml pyproject.toml
+COPY .env .env
+
+# Copy the application source code into the container
+COPY src/ /app/src/
+
+RUN . .venv/bin/activate 
+RUN uv sync --all-extras 
+RUN uv pip install --no-cache-dir --editable .
+RUN uv pip install llm-sandbox llm-sandbox[docker] 
+RUN uv run python -c "import llm_sandbox; print('llm-sandbox installed successfully')"
+# Expose the port the app runs on
+EXPOSE 8082
+
+# Command to run the application
+CMD ["/bin/bash", "-c", "source .venv/bin/activate && PYTHONPATH=src uv run python -m agentic_framework_pkg.sandbox_mcp_server.main"]

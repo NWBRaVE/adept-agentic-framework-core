@@ -1,0 +1,42 @@
+services:
+  jupyterlab:
+    build:
+      context: .
+      dockerfile: Dockerfile.jupyterlab
+    container_name: agentic_jupyterlab
+    user: "${UID}:${GID}"  # from .env
+    working_dir: /home/jovyan/work
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./data:/home/jovyan/work/data
+      - ./notebooks:/home/jovyan/work/notebooks
+      - shared_uploads:/home/jovyan/work/data/uploaded_files
+    env_file:
+      - ./.env
+    environment:
+      - AGENT_GATEWAY_AUTH_ENABLED=false
+      - VECTOR_DB_URL=http://vector_db_server:8001
+      - KEYCLOAK_URL=http://keycloak:8180
+      - KEYCLOAK_REALM=master
+      - LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
+      - MCP_SERVER_URL=http://mcp_server:8080/mcp
+      - MCP_SERVER_URL_FOR_LANGCHAIN=http://mcp_server:8080/mcp
+      - HPC_MCP_SERVER_URL=http://hpc_mcp_server:8081
+      - DEFAULT_MCP_SERVER_URL_FOR_LANGCHAIN=http://mcp_server:8080/mcp
+      - HPC_MCP_SERVER_URL_FOR_LANGCHAIN=http://hpc_mcp_server:8081/mcp
+      - SANDBOX_MCP_SERVER_URL_FOR_LANGCHAIN=http://sandbox_mcp_server:8082/mcp
+      - SANDBOX_MCP_SERVER_URL=http://sandbox_mcp_server:8082/mcp
+      - VECTOR_DB_URL=http://vector_db_server:8001
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - agent_gateway
+      - vector_db_server
+      - hpc_mcp_server
+      - sandbox_mcp_server
+      - mcp_server
+      - redis
+    restart: unless-stopped
+    networks:
+      - agentic_network
+

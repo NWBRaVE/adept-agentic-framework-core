@@ -1,0 +1,89 @@
+# mcp_server.Dockerfile
+FROM python:3.11-slim AS base
+
+# Create the non-root user and group in the final stage
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+
+# Explicitly set HOME for the appuser to a writable directory, make user permission sticky
+ENV HOME=/app
+RUN mkdir -p ${HOME} && chown -R appuser:appgroup ${HOME} && chmod g+s ${HOME}
+WORKDIR ${HOME}
+
+# Stage 1: Builder stage
+# Install system dependencies needed for some Python packages (like build-essential for gemmi)
+# Attempt to fix GPG errors by robustly reinstalling keyring and related packages
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    # Step 1: Initial update to populate package lists, tolerating GPG issues and old metadata
+    apt-get update \
+        -o Acquire::Check-Date=false \
+        -o Acquire::Check-Valid-Until=false \
+        -o Acquire::AllowInsecureRepositories=true \
+        -o Acquire::AllowDowngradeToInsecureRepositories=true && \
+    # Step 2: Install/Reinstall essential packages for secure apt operation, allowing unauthenticated install
+    apt-get install -y --no-install-recommends --allow-unauthenticated --reinstall \
+        ca-certificates \
+        debian-archive-keyring \
+        gnupg \
+        apt-transport-https && \
+    # Step 3: Clean up apt's state thoroughly before attempting a secure update
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    # Step 4: Perform a secure update. With updated keyring and CAs, this should succeed.
+    apt-get update && \
+    # Step 5: Install desired packages
+    apt-get install -y --no-install-recommends build-essential && \
+    # Step 6: Final cleanup of apt cache
+    rm -rf /var/lib/apt/lists/*
+
+
+# Copy only necessary files for dependency installation to leverage Docker cache
+COPY pyproject.toml uv.lock* .env ./
+# The uv.lock might not exist if `uv init` wasn't run or `uv pip compile` wasn't used to generate it.
+# If uv.lock is not present, uv will resolve dependencies from pyproject.toml.
+
+# Copy the application source code *before* installing dependencies
+# as the project itself is likely installed in editable mode.
+COPY src/ ./src/
+
+# Install dependencies using uv system-wide.
+# The --mount cache is for uv's internal download/metadata cache during the build.
+# Increase HTTP timeout for uv to handle slower network or larger packages
+ENV UV_HTTP_TIMEOUT=300
+
+# Install uv and create a virtual environment, then install the package in editable mode.
+RUN pip install --no-cache-dir uv
+RUN uv venv -p 3.11 && uv pip install --no-cache-dir --editable .
+
+# # If you have a uv.lock and want to sync exactly:
+# RUN --mount=type=cache,target=/root/.cache/uv \
+#     uv sync --all-extras 
+    
+# These directories are created and owned by root initially, then ownership is changed.
+RUN mkdir -p /app/data && mkdir -p /app/shared_uploads /app/data/uploaded_files
+RUN chown -R appuser:appgroup ${HOME} 
+
+# Use a path writable by appuser at runtime
+ENV UV_CACHE_DIR=/tmp/.uv_cache_appuser_runtime 
+
+# Ensure ownership
+RUN mkdir -p ${UV_CACHE_DIR} && chown -R appuser:appgroup ${UV_CACHE_DIR}
+
+# Switch to the non-root user before installing dependencies
+USER appuser
+WORKDIR ${HOME}
+
+# Use appuser for running the application
+# Expose the port the MCP server will run on (Uvicorn default or configured)
+EXPOSE 8080
+
+# Command to run the MCP server using the uv executable from PATH
+# This assumes 'run-mcp-server' is defined in pyproject.toml's [project.scripts]
+# and that it correctly starts Uvicorn on 0.0.0.0:8080
+CMD ["uv", "run", "run-mcp-server"]
+
+# Or, directly running the MCP server with Uvicorn
+# Assumes the main entry point is in agentic_framework_pkg.mcp_server.main
+# and that it can be run with Uvicorn.
+
+# CMD ["uv", "run", "python", "-m", "agentic_framework_pkg.mcp_server.main", "--host", "0.0.0.0", "--port", "8080"]

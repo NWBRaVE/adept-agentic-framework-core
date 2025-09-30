@@ -1,0 +1,25 @@
+#version: '3.8'
+
+services:
+  n8n:
+    image: n8nio/n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      # The WEBHOOK_URL must be set for n8n to correctly handle triggers.
+      # We point it to the host machine's localhost, as webhooks will be called from there.
+      - WEBHOOK_URL=http://localhost:5678/
+    volumes:
+      - n8n_data:/home/node/.n8n
+    # By not defining a custom network, this service will join the default
+    # network created by Docker Compose for this project, allowing it to
+    # resolve other services like 'agent_gateway' by their name.
+    networks:
+      - agentic_network
+    depends_on:
+      - redis
+
+volumes:
+  n8n_data:
+    driver: local

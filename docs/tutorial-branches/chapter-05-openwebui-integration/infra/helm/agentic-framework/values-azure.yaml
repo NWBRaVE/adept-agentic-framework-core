@@ -1,0 +1,11 @@
+# Azure-specific values for the agentic-framework Helm chart.
+
+# For a cloud deployment, images should always be pulled from the remote registry.
+global:
+  image:
+    pullPolicy: Always
+    tag: "latest"
+
+# Ensure the sandbox server uses the Kubernetes backend in the cluster.
+sandbox_mcp_server:
+  backend: "kubernetes"

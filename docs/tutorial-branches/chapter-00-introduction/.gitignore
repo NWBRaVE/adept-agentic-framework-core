@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+wheels/
+*.manifest
+*.spec
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+.env
+
+# Docker
+docker-compose.override.yml
+
+# uv
+.uv
+
+# macOS
+.DS_Store
+
+# data
+/data/*
+*~
+.env-*

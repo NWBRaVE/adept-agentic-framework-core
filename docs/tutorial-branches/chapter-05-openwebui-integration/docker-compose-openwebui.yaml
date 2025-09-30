@@ -1,0 +1,57 @@
+# docker-compose-openwebui.yaml
+version: '3.8'
+
+services:
+  openwebui_backend:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile.openwebui_backend
+    container_name: agentic_openwebui_backend
+    ports:
+      - "8083:8081"
+    volumes:
+      - ./data:/app/data
+      - shared_uploads:/app/data/uploaded_files
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - AZURE_API_KEY=${AZURE_API_KEY}
+      - AZURE_API_BASE=${AZURE_API_BASE}
+      - AZURE_API_VERSION=${AZURE_API_VERSION}
+      - VERTEXAI_PROJECT=${VERTEXAI_PROJECT}
+      - VERTEXAI_LOCATION=${VERTEXAI_LOCATION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION_NAME=${AWS_REGION_NAME}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - OLLAMA_API_BASE=${OLLAMA_API_BASE}
+      - MCP_SERVER_URL_FOR_LANGCHAIN=http://mcp_server:8080/mcp
+      - HPC_MCP_SERVER_URL_FOR_LANGCHAIN=http://hpc_mcp_server:8081/mcp
+      - SANDBOX_MCP_SERVER_URL_FOR_LANGCHAIN=http://sandbox_mcp_server:8082/mcp
+      - LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
+    depends_on:
+      - mcp_server
+      - hpc_mcp_server
+      - sandbox_mcp_server
+    restart: unless-stopped
+    networks:
+      - agentic_network
+
+  
+
+volumes:
+  shared_uploads:
+    driver: local
+    #name: agentic_framework_shared_uploads
+    #external: true
+  data:
+    driver: local
+    #name: agentic_framework_data
+    #external: true
+
+#networks:
+#  agentic_network:
+#    driver: bridge
+#    #name: agentic_framework_agentic_network
+#    #external: true

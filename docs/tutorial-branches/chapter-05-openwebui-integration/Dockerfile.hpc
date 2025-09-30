@@ -1,0 +1,104 @@
+FROM python:3.11-slim
+
+LABEL maintainer="[Paul Rigor/paul.rigor@pnnl.gov]" 
+LABEL description="Dockerfile for the Agentic Framework HPC MCP Server with Nextflow and BLAST."
+
+# Create the non-root user and group
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+
+# Set up HOME directory and WORKDIR
+ENV HOME=/app
+RUN mkdir -p ${HOME} && chown -R appuser:appgroup ${HOME} && chmod g+s ${HOME}
+WORKDIR ${HOME}
+
+# Set DEBIAN_FRONTEND to noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies: Java (for Nextflow), curl, unzip, procps, build-essential (for some Python packages)
+# Includes GPG fix for apt-get
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends apt-transport-https ca-certificates gnupg && \
+    # GPG fix steps (simplified from other Dockerfiles, assuming base image is relatively up-to-date)
+    apt-get clean && rm -rf /var/lib/apt/lists/* && apt-get update && \
+    apt-get install -y --no-install-recommends \
+    openjdk-17-jre-headless \
+    curl \
+    unzip \
+    procps \
+    build-essential \
+    ffmpeg \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Nextflow and make sure it's executable
+ENV NEXTFLOW_VERSION 25.04.4
+ENV NXF_VER ${NEXTFLOW_VERSION}
+RUN curl -s https://get.nextflow.io | bash && \
+    mv nextflow /usr/local/bin/ && \
+    chmod a+rx /usr/local/bin/nextflow
+
+
+# Install NCBI BLAST+
+# Adjust BLAST_VERSION if needed
+ENV BLAST_VERSION 2.15.0
+RUN curl -fsSL https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/${BLAST_VERSION}/ncbi-blast-${BLAST_VERSION}+-x64-linux.tar.gz | tar -xz -C /opt && \
+    ln -s /opt/ncbi-blast-${BLAST_VERSION}+/bin/* /usr/local/bin/
+# Note: BLAST databases need to be managed separately (e.g., via volumes).
+
+# Install uv Python package manager
+RUN pip install --no-cache-dir uv
+
+# Install yt-dlp and whisper using uv pip with --system flag
+# This makes them available on the system PATH, accessible by Nextflow processes.
+RUN uv pip install --system yt-dlp openai-whisper
+
+# Pre-download a default Whisper model (e.g., "base") to /app/.cache/whisper
+# This directory will be owned by appuser later.
+RUN mkdir -p /app/.cache/whisper && \
+    python -c "import whisper; print(f'Downloading Whisper model \"base\" to /app/.cache/whisper...'); whisper.load_model('base', download_root='/app/.cache/whisper'); print('Whisper model \"base\" download complete.')"
+# If you need other models, add more lines like the one above, e.g., for 'small', 'medium'.
+
+# Create a virtual environment using uv (as root, then chown later or ensure WORKDIR is writable by appuser if created by appuser)
+RUN uv venv -p 3.11 .venv
+ENV PATH="/app/.venv/bin:$PATH" 
+
+# Copy project files for dependency installation
+# Assumes build context is the project root.
+COPY pyproject.toml uv.lock* .env* ./ 
+# Copy source code (assuming pyproject.toml installs the project in editable mode from src)
+COPY src/ ./src/
+
+# Install Python dependencies using uv
+ENV UV_HTTP_TIMEOUT=300
+RUN uv sync --all-extras 
+RUN uv pip install --no-cache-dir --editable . 
+
+# # Copy the Nextflow script. Path is relative to build context (project root).
+# COPY ./agentic_framework/src/agentic_framework_pkg/hpc_mcp_server/tools/blast_pipeline.nf /app/blast_pipeline.nf
+# COPY ./agentic_framework/src/agentic_framework_pkg/hpc_mcp_server/tools/video_transcription_pipeline.nf /app/video_transcription_pipeline.nf 
+
+# Set environment variables
+ENV PYTHONPATH=/app/src 
+ENV HPC_MCP_SERVER_PORT=8081
+ENV LOGGING_LEVEL="INFO"
+ENV NXF_VERBOSITY=3 
+
+# # Path for the Nextflow script, used by nextflow_blast_tool.py
+# ENV NEXTFLOW_BLAST_SCRIPT_PATH="/app/blast_pipeline.nf"
+# ENV NEXTFLOW_TRANSCRIPTION_SCRIPT_PATH="/app/video_transcription_pipeline.nf"
+# UV Cache Directory for runtime, writable by appuser
+ENV UV_CACHE_DIR=/tmp/.uv_cache_appuser_runtime
+
+# Create and set permissions for UV_CACHE_DIR and ensure /app is owned by appuser
+RUN mkdir -p ${UV_CACHE_DIR} /app/data/uploaded_files && chown -R appuser:appgroup ${UV_CACHE_DIR}
+RUN chown -R appuser:appgroup ${HOME}
+
+# Switch to non-root user
+USER appuser
+
+# Expose the port the HPC server will run on
+EXPOSE 8081
+
+# Command to run the HPC MCP server
+# The main.py for hpc_mcp_server is at agentic_framework/src/agentic_framework_pkg/hpc_mcp_server/main.py
+CMD ["uv", "run", "python", "-m", "agentic_framework_pkg.hpc_mcp_server.main"]

@@ -1,0 +1,81 @@
+# This file is a template, and might need editing before it works on your project.
+# This is a sample GitLab CI/CD configuration file that should run without any modifications.
+# It demonstrates a basic 3 stage CI/CD pipeline. Instead of real tests or scripts,
+# it uses echo commands to simulate the pipeline execution.
+#
+# A pipeline is composed of independent jobs that run scripts, grouped into stages.
+# Stages run in sequential order, but jobs within stages run in parallel.
+#
+# For more information, see: https://docs.gitlab.com/ee/ci/yaml/index.html#stages
+#
+# You can copy and paste this template into a new `.gitlab-ci.yml` file.
+# You should not add this template to an existing `.gitlab-ci.yml` file by using the `include:` keyword.
+#
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Getting-Started.gitlab-ci.yml
+
+stages:          # List of stages for jobs, and their order of execution
+  - static-analysis
+  - build
+  - test
+  - deploy
+
+# static-analysis
+# This job uses 'Ruff' to perform fast linting, import sorting, and format checking.
+# Ruff can replace tools like flake8, isort, and black.
+# Docs: https://docs.astral.sh/ruff/
+lint-and-format-check:
+  stage: static-analysis
+  image: python:3.11-slim
+  before_script:
+    - pip install ruff
+  script:
+    - echo "🔍 Running ruff linter (for syntax, imports, etc.)..."
+    - ruff check .
+    - echo "🎨 Running ruff format checker..."
+    - ruff format --check .
+
+# This job uses 'TruffleHog' to scan the repository for any hardcoded secrets.
+# This is crucial for preventing sensitive data like API keys from being exposed.
+# Docs: https://github.com/trufflesecurity/trufflehog
+secret-detection:
+  stage: static-analysis
+  # Use the official TruffleHog image. The entrypoint is overridden to run custom commands.
+  image:
+    name: trufflesecurity/trufflehog:latest
+    entrypoint: [""]
+  script:
+    - echo "🔑 Scanning for secrets..."
+    # Scans the entire project directory. The '--fail' flag ensures the pipeline
+    # fails if any potential secrets are found.
+    - trufflehog filesystem . --fail
+
+
+build-job:       # This job runs in the build stage, which runs first.
+  stage: build
+  script:
+    - echo "Compiling the code..."
+    - echo "Compile complete."
+
+unit-test-job:   # This job runs in the test stage.
+  stage: test    # It only starts when the job in the build stage completes successfully.
+  script:
+    - echo "Running unit tests... This will take about 60 seconds."
+    - sleep 60
+    - echo "Code coverage is 90%"
+
+lint-test-job:   # This job also runs in the test stage.
+  stage: test    # It can run at the same time as unit-test-job (in parallel).
+  script:
+    - echo "Linting code... This will take about 10 seconds."
+    - sleep 10
+    - echo "No lint issues found."
+
+deploy-job:      # This job runs in the deploy stage.
+  stage: deploy  # It only runs when *both* jobs in the test stage complete successfully.
+  environment: production
+  script:
+    - echo "Deploying application..."
+    - echo "Application successfully deployed."

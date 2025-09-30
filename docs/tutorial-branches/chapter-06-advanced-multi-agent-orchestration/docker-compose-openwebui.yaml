@@ -1,0 +1,31 @@
+# docker-compose-openwebui.yaml
+#version: '3.8'
+
+services:
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    ports:
+      - "8902:8080"
+    environment:
+      #- 'OLLAMA_BASE_URL=http://agent_gateway:8081'
+      - 'CHROMA_DB_URL=http://vector_db_server:8001'
+    volumes:
+      - openwebui_data:/app/backend/data
+      - shared_uploads:/app/backend/data/uploads
+    restart: always
+    depends_on:
+      - agent_gateway
+      - vector_db_server
+      - redis
+    networks:
+      - agentic_network
+
+  
+
+
+
+volumes:
+  openwebui_data:
+    driver: local
+

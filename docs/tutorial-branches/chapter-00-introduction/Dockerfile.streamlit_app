@@ -1,0 +1,38 @@
+# DEPRECATED: Use Dockerfile
+# streamlit_app.Dockerfile
+FROM python:3.11-slim
+
+# Install openssl for generating self-signed certificates
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+
+ENV HOME=/app
+WORKDIR ${HOME}
+
+# Create a directory for the certificate
+RUN mkdir -p /app/certs
+
+# Generate the self-signed certificate and key
+# This certificate is valid for 10 years.
+# Using a generic subject for local development.
+RUN openssl req -x509 -newkey rsa:4096 -nodes \
+    -out /app/certs/cert.pem \
+    -keyout /app/certs/key.pem \
+    -days 3650 \
+    -subj "/C=US/ST=Washington/L=Seattle/O=LocalDev/OU=IT/CN=localhost"
+
+COPY pyproject.toml uv.lock* ./
+COPY src/ ./src/
+
+RUN pip install --no-cache-dir uv
+RUN uv venv -p 3.11 && uv pip install --no-cache-dir --editable .
+
+# Create data directory and set permissions for both certs and data
+RUN mkdir -p /app/data/uploaded_files && chown -R appuser:appgroup /app
+
+USER appuser
+
+EXPOSE 8501
+
+CMD ["uv", "run", "run-streamlit-harness"]

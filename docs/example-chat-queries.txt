@@ -1,0 +1,234 @@
+Use pubchem to obtain the most recent drugs for cancer therapeutics. For the top 3 drugs, combine the set of target proteins. For the top 3 proteins, use uniprot to obtain their sequences. Afterward, use the first protein and run a blast query using the NCBI webservice not the local blast server. Show me the plan before proceeding.
+Okay, using your internal knowledge, what are the latest set of drug cancer therapeutics? Obtain drug targets using pubchem. And then obtain the sequences of the top 3 drug targets. For 2 of those proteins, perform a blast search using the NCBI webservice. Share your plan before proceeding.
+Let's design another MCP tool within the sandbox_mcp_server that will highlight the agent-to-agent (A2A) protocol and provide a dynamic/online capability of instantiating a multi-agent session. In order to do so, the tool needs to be able to dynamically instantiate a chain-of-thought supervisor agent as an orchestrator as well as arbitrary number of other agents that will be defined dynammically based on the user's query in the stream lit app. We need to make sure that all of the agents have access to all of the available MCP tools (similar to the tools registry in the langchain_agent). The user should be able to ask the main langchain agent to "create multiple agents whose roles include a chemist, software engineer, data scientist, materials scientist" and a multi-agent sesion will be created. The user can then reference this multi-agent session to assign tasks and other responsibilities to each of the agents. The supervisor agent will be orchestrator amongst the agent; and it will generate either the summary or detailed report developed by the agents in multi-agent session.
+
+Example User Request for multi-agent session:
+This interaction would happen in two steps in the Streamlit chat interface.
+
+Step 1: Create the Agent Team
+
+First, the user asks the main agent to create the multi-agent session. This tests the CreateMultiAgentSession tool.
+
+User: "Please create a multi-agent team with the following expert roles: a chemist, a materials scientist, and a data scientist."
+
+The main agent should recognize this request and call the CreateMultiAgentSession tool with roles=['chemist', 'materials scientist', 'data scientist']. It should then respond with a success message and the newly created multi_agent_session_id.
+
+Step 2: Assign a Collaborative Task
+
+Next, the user provides a complex task that requires the expertise of the newly created team. This tests the RunTaskInMultiAgentSession tool and the supervisor's ability to orchestrate the workers.
+
+User: "Excellent. Now, using the session you just created, I want you to orchestrate the team to produce a report on the feasibility of using graphene as a novel battery electrode. The chemist should investigate its electrochemical properties and reaction kinetics. The materials scientist should analyze its structural integrity and ion-diffusion characteristics for this purpose. The data scientist should find and summarize performance data (like cycle life and energy density) from recent academic papers. Please synthesize all findings into a comprehensive final report."
+
+Why This is a Good Test Case
+This two-step query is effective because it thoroughly tests the entire multi-agent system:
+
+Tests Tool Chaining: It forces the main agent to first use CreateMultiAgentSession and then use its output (the multi_agent_session_id) as input for the RunTaskInMultiAgentSession tool.
+Validates Dynamic Agent Creation: The first prompt directly tests the core feature of creating a team with a dynamic set of roles.
+Requires Complex Orchestration: The second prompt provides a high-level task that is too complex for any single agent. It requires the supervisor to:
+Decompose the problem: Break the main goal into sub-tasks.
+Delegate correctly: Assign each sub-task to the appropriate expert (chemist's task to the chemist, etc.).
+Synthesize results: Combine the outputs from all worker agents into a final, coherent report, as instructed.
+Verifies Tool Access for Workers: For the worker agents to succeed, they must be able to use the full suite of MCP tools (like PerformWebSearch for the data scientist or SearchPubChemByName for the chemist), which validates that the toolset is correctly passed down to them.
+Running this test will give you high confidence that your multi-agent orchestration tool is functioning correctly from end to end.
+
+Multi-agent query: Spin up a team of expert AI agents (chemist, data scientist, software engineers, technical project manager) with a supervisor. They will investigate the latest drug therapeutics for cancer and analyze the drug targets including structural similar, if any alongside the relationships amongst their biological function and/or functional networks in the human body.
+
+Clarification on supervisor only vs architect and supervisor agents:
+
+1. The Original Supervisor Agent (The "Manager")
+Combined Responsibilities: In the original design, the supervisor acts as a manager who is responsible for both planning and execution.
+Workflow:
+It receives a high-level task from the user (e.g., "produce a report on graphene batteries").
+It must first think and create a plan internally (e.g., "I should ask the chemist about properties, the materials scientist about structure...").
+It then executes that plan by calling the worker agent tools.
+Finally, it synthesizes the results.
+Prompting: Its system prompt is complex, instructing it to do everything from understanding the goal and breaking it down to delegating and synthesizing.
+python
+# from multi_agent_tool.py (original version)
+"You are a supervisor agent. Your job is to orchestrate a team... First, understand the user's overall goal. Then, break it down into specific sub-tasks. Delegate each sub-task..."
+Analogy: This is like a project manager who single-handedly writes the project plan, assigns the tasks, and then compiles the final deliverable.
+2. The Proposed Planner + Supervisor Architecture (The "Architect & Foreman")
+This new design splits the original supervisor's job into two distinct roles, creating a more structured, two-step process.
+
+The Planner Agent (The "Architect")
+Single Responsibility: Planning. The planner's only job is to create a high-quality, step-by-step plan.
+Inputs: It takes the user's high-level goal and the list of available expert roles.
+Outputs: Its only output is the text of the plan itself. It has no tools and cannot execute anything.
+Prompting: Its prompt is very focused, which improves the quality of the plan.
+python
+# from multi_agent_tool.py (new version)
+"You are an expert planner. Your job is to create a detailed, step-by-step plan... For each step in the plan, specify which expert role should perform the task... Your only output should be the plan."
+The Supervisor Agent (The "Foreman")
+Single Responsibility: Execution. The new supervisor's job is to be a diligent foreman. It doesn't create the plan; it just executes it.
+Workflow:
+It receives the user's task and the detailed plan generated by the Planner.
+It follows the plan step-by-step, delegating tasks to the workers as specified. It is explicitly told not to deviate from the plan.
+It handles worker failures and synthesizes the final report based on the results of the executed plan.
+Prompting: Its prompt is now much simpler and focused on execution.
+python
+# from multi_agent_tool.py (new version)
+"You are a supervisor agent. Your job is to orchestrate a team... based on a provided plan. You will be given a high-level task and a step-by-step plan. You must execute the plan... Do not deviate from the plan."
+Summary of Key Differences
+Feature	Original Supervisor	Proposed Planner + Supervisor
+Core Principle	Monolithic (one agent does all)	Separation of Concerns (plan vs. execute)
+Workflow	1-step: Task -> Supervisor -> Report	2-step: Task -> Planner -> Plan -> Supervisor -> Report
+Predictability	Lower. The agent's internal plan can vary.	Higher. The supervisor is constrained to a fixed plan.
+Control & Debugging	Difficult. The plan is a "thought" in the agent's mind.	Easier. The plan is an explicit artifact that can be logged, reviewed, or even require human approval before execution.
+Robustness	Can be less reliable as the prompt is complex.	More reliable, as each agent has a simpler, more focused task, reducing the chance of LLM confusion.
+In short, by separating planning from execution, we create a more robust, predictable, and debuggable multi-agent system, which is a critical step as you scale up the complexity of the tasks you want to automate.
+
+
+Improving plotting:
+Update the code execution mcp tool to support generating plots using the artifacts sandbox session. Make sure to update the streamlit application to be able to display the plots generated by the tool.
+Let's make sure that the user can decide when to use the plotting capability versus not.
+In addition, support an iframe for fhe plot output (that may or may not be single image plots but embedded html).
+
+I need a competitive analysis for a new drug candidate targeting protein P01112. Create a team with a bioinformatician and a chemist to analyze its sequence, find existing patents, and identify similar compounds. I would like to have a multi-phase approach such that plan is split into 3 phases each with their own team. Ensure that the plan to be constrained to the MCP tools (except the multi-agent tool) available to the agents. In addition, for steps that require code execution using python will also include code that will install required packages. Moreover, the python scripts have to perform the installation within the same logic but before the required libraries are imported (e.g., use a subproccess to perform the installation). Please show me the plan.
+
+Output: Insane complexity!
+
+agentic_streamlit_app   | 2025-06-29 20:29:14,395 - agentic_framework_pkg.scientific_workflow.mcp_langchain_tools - DEBUG - Calling MCP tool 'execute_approved_plan_in_session' on server with params: {'multi_agent_session_id': 'multi-agent-69b6d8ce-c167-4a12-a80c-798622a3b669', 'mcp_session_id': '49285d16-3523-4ede-b1c8-6e835d4e9e6d'}
+agentic_mcp_server      | 2025-06-29 20:29:14,398 - agentic_framework_pkg.mcp_server.main - INFO - Request body (parsed as JSON): {'method': 'notifications/initialized', 'jsonrpc': '2.0'}
+
+agentic_mcp_server      | 2025-06-29 20:29:14,402 - agentic_framework_pkg.mcp_server.main - INFO - Request body (parsed as JSON): {'method': 'tools/call', 'params': {'name': 'execute_approved_plan_in_session', 'arguments': {'multi_agent_session_id': 'multi-agent-69b6d8ce-c167-4a12-a80c-798622a3b669', 'mcp_session_id': '49285d16-3523-4ede-b1c8-6e835d4e9e6d'}, '_meta': {'progressToken': 1}}, 'jsonrpc': '2.0', 'id': 1}
+
+agentic_mcp_server      | 2025-06-29 20:29:14,403 - agentic_framework_pkg.mcp_server.main - INFO - Request body (parsed as JSON): {'method': 'tools/call', 'params': {'name': 'execute_approved_plan_in_session', 'arguments': {'multi_agent_session_id': 'multi-agent-69b6d8ce-c167-4a12-a80c-798622a3b669', 'mcp_session_id': '49285d16-3523-4ede-b1c8-6e835d4e9e6d'}, '_meta': {'progressToken': 1}}, 'jsonrpc': '2.0', 'id': 1}
+
+agentic_mcp_server      | 2025-06-29 20:29:51,368 - agentic_framework_pkg.mcp_server.tools.multi_agent_tool - INFO - Supervisor delegating task to run_devops_engineer_agent: Phase 1.1 - seq-env-setup: Provision a Docker container with Python 3.10 and MCP CLI/SDK, configure a persistent data volume and initialize a Git repository for code versioning, then deploy the container to the Kubernetes 'test' namespace with proper RBAC settings.
+
+agentic_mcp_server      | 2025-06-29 20:30:12,687 - agentic_framework_pkg.mcp_server.tools.multi_agent_tool - INFO - Supervisor delegating task to run_software_engineer_agent: Phase 1.2 - fetch_align.py: Write a Python script that includes in-script pip installs for mcp-sdk, biopython, pandas, matplotlib. Then uses MCP SDK calls to retrieve P01112 FASTA and ortholog sequences, performs multiple sequence alignment via Bio.Align.MultipleSeqAlignment, outputs alignment files, and saves plots to /results/phase1.
+
+agentic_mcp_server      | 2025-06-29 20:30:47,375 - agentic_framework_pkg.mcp_server.tools.multi_agent_tool - INFO - Supervisor delegating task to run_bioinformatician_agent: Phase 1.3 - Sequence Analysis Protocol: Define search parameters (taxonomic scope, identity cutoffs), run fetch_align.py, identify conserved domains using MCP domain annotation, calculate per-residue conservation scores, and visualize domain architecture and conservation heatmap. Summarize results.
+
+agentic_mcp_server      | 2025-06-29 20:31:02,576 - agentic_framework_pkg.mcp_server.tools.multi_agent_tool - INFO - Supervisor delegating task to run_machine_learning_engineer_agent: Phase 1.4 - seq_embed.py: Write a Python script that uses in-script pip installs for mcp-ml, torch, transformers, loads ProtBert embeddings for each sequence with MCP-ML, trains a simple classifier/regressor to predict active-site residue positions (or attributes), and generates t-SNE/UMAP visualization of the sequence embedding space. Save outputs under /results/phase1.
+
+agentic_mcp_server      | 2025-06-29 20:31:23,674 - agentic_framework_pkg.mcp_server.tools.multi_agent_tool - INFO - Supervisor delegating task to run_devops_engineer_agent: Phase 2.1 - patent-env-setup: Extend or provision a Docker image for patent analysis. Include MCP Patent API credentials via Kubernetes secrets, install Java runtime (for MCP patent CLI if needed), and set up a cronjob in Kubernetes to refresh patent data daily.
+
+agentic_mcp_server      | 2025-06-29 20:31:42,230 - agentic_framework_pkg.mcp_server.tools.multi_agent_tool - INFO - Supervisor delegating task to run_software_engineer_agent: Phase 2.2 - fetch_patents.py: Create a Python script with in-script pip install for mcp-sdk, pandas, networkx, matplotlib, to query the MCP patent database for 'P01112 inhibitors', IPC codes, WO/US/EU families, extract title, abstract, filing date, assignees, and save raw and JSON-parsed patent records to /results/phase2.
+
+agentic_mcp_server      | 2025-06-29 20:32:10,156 - agentic_framework_pkg.mcp_server.tools.multi_agent_tool - INFO - Supervisor delegating task to run_chemist_agent: Phase 2.3 - Patent Strategy & Analysis: Define keyword and structural search terms based on lead scaffold, run fetch_patents.py, manually review top 50 patent abstracts/claims, classify patents by claim scope (composition, formulation, use), and summarize landscape: major players, expiration timelines, freedom-to-operate. Provide a concise written summary.
+
+agentic_mcp_server      | 2025-06-29 20:32:25,335 - agentic_framework_pkg.mcp_server.tools.multi_agent_tool - INFO - Supervisor delegating task to run_machine_learning_engineer_agent: Phase 2.4 - patent_cluster.py: Write a Python script with in-script pip install for mcp-ml, sentence-transformers, scikit-learn, plotly. Embed patent abstracts via transformer model, cluster embeddings (e.g. KMeans or HDBSCAN), visualize cluster map, and generate interactive dendrogram. Save outputs under /results/phase2.
+
+Output:
+It looks like the execution pipeline encountered a recursion limit error. I’ve terminated the session.
+
+Next steps:
+
+• We can increase the LangGraph recursion limit in the configuration and retry.
+• Or we can split the execution into smaller sub-tasks (e.g., phase-by-phase).
+
+Please advise how you’d like to proceed.
+
+Ask the agent...
+
+Yes, please split the workflows into smaller sub-tasks and proceed phase-by-phase.
+
+Updated plan:
+AIMessage(content='I’ve created a focused plan for Phase 1 (bioinformatic analysis) with roles: bioinformatician, software engineer, devops engineer, and machine learning engineer. \n\nPlease review and approve this Phase 1 plan. Once approved, I will execute it using our multi-agent tools step-by-step.', additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 76, 'prompt_tokens': 6320, 'total_tokens': 6396, 'completion_tokens_details': {'accepted_prediction_tokens': 0, 'audio_tokens': 0, 'reasoning_tokens': 0, 'rejected_prediction_tokens': 0}, 'prompt_tokens_details': {'audio_tokens': 0, 'cached_tokens': 4864}}, 'model_name': 'o4-mini-2025-04-16', 'system_fingerprint': None, 'id': 'chatcmpl-Bnt5a5aOcAqWIf39HRmzuMS5OZQow', 'service_tier': None, 'prompt_filter_results': [{'prompt_index': 0, 'content_filter_results': {'hate': {'filtered': False, 'severity': 'safe'}, 'jailbreak': {'filtered': False, 'detected': False}, 'self_harm': {'filtered': False, 'severity': 'safe'}, 'sexual': {'filtered': False, 'severity': 'safe'}, 'violence': {'filtered': False, 'severity': 'safe'}}}], 'finish_reason': 'stop', 'logprobs': None, 'content_filter_results': {'hate': {'filtered': False, 'severity': 'safe'}, 'self_harm': {'filtered': False, 'severity': 'safe'}, 'sexual': {'filtered': False, 'severity': 'safe'}, 'violence': {'filtered': False, 'severity': 'safe'}}}, id='run--4a4c666a-506f-4fdf-869f-33d15324ea2a-0', usage_metadata={'input_tokens': 6320, 'output_tokens': 76, 'total_tokens': 6396, 'input_token_details': {'audio': 0, 'cache_read': 4864}, 'output_token_details': {'audio': 0, 'reasoning': 0}})]}
+
+
+Multi-phase, phase 1 plan:
+
+Below is the detailed Phase 1 plan. Let me know if you’d like any edits. Once approved, I’ll execute it via the multi-agent session.
+
+Multi-Agent Session: multi-agent-1bf3550d-de0b-463f-bc89-6ea068546b77
+
+Phase 1: Bioinformatic Analysis for P01112
+Team: Bioinformatician, Software Engineer, DevOps Engineer, Machine Learning Engineer
+
+Initialize Project Repository
+DevOps:
+• Create “P01112_Bioinfo_Phase1” repo with folders: /scripts, /data/raw, /data/processed, /reports
+• Add README.md and CI placeholders
+Configure Environment
+DevOps:
+• requirements.txt (biopython, requests, pandas, matplotlib, clustalo, xmltodict)
+• setup_env.sh to install Python 3.8+ and pip install -r requirements.txt
+get_sequence.py
+Software Eng.:
+• In-script pip install (e.g., subprocess to install biopython, requests)
+• Fetch P01112 FASTA via UniProt REST with requests or Biopython
+• Save → data/raw/P01112.fasta
+Retrieval Validation
+Bioinformatician:
+• Check sequence length & ends; record in reports/retrieval_validation.txt
+run_blast.py
+Software Eng.:
+• In-script pip install for biopython
+• Use NCBIWWW.qblast against “nr”, top 10 hits→ XML (data/raw/P01112_blast.xml)
+• Parse to CSV summary (accession, identity, E-value)
+BLAST Validation
+Bioinformatician:
+• Confirm EGFR-family hits; note in reports/blast_validation.txt
+make_msa.py
+Software Eng.:
+• In-script pip install for required tools (e.g., call Clustal Omega CLI)
+• Align P01112 + top hits → data/processed/P01112_msa.fasta (and plot)
+MSA Validation
+Bioinformatician:
+• Inspect conserved motifs/gaps; record in reports/msa_validation.txt
+map_domains.py
+Software Eng.:
+• In-script pip install (requests, xmltodict)
+• Query Pfam/InterPro REST for P01112 domains
+• Save CSV → data/processed/P01112_domains.csv (and domain plot)
+Domain Validation
+Bioinformatician:
+• Cross-check domain coordinates vs UniProt, note in reports/domain_validation.txt
+Summary Report Template
+Software Eng.:
+• Create reports/Phase1_Summary_Report.md with sections & file table
+Draft Final Report
+Bioinformatician:
+• Write Methods, Results, Figures, Discussion in the Markdown report
+Package Deliverables
+DevOps:
+• Include all raw/processed data, scripts, and reports
+• Tag commit v1.0-Phase1 and create release archive
+End-to-End Testing
+DevOps:
+• Master script run_all.sh to run steps sequentially
+• Verify reproducibility; update README
+Please review and, if ready, I’ll execute this plan now.
+
+
+
+************************
+Multi-team, multi-agent:
+Create three multi-agent teams to plan and proceed with the following multi-phase task:I need a competitive analysis for a new drug candidate targeting protein P01112. Create a team with a bioinformatician and a chemist to analyze its sequence, find existing patents, and identify similar compounds.  Ensure that  the plan to be constrained to the MCP tools (except the multi-agent tool) available to the agents.
+In addition, for steps that require code execution using python will also include code that will install required packages. 
+Moreover, the python scripts have to perform the installation within the same logic but before the required libraries are imported (e.g., use a subproccess to perform the installation). 
+Please show me the plan.
+
+
+Updated query for multi-team, multi-agent, multi-phase workflow:
+Create three multi-agent teams to plan and proceed with the following task that needs to proceed in multiple phases due to langgraph recursion constraints: I need a competitive analysis for a new drug candidate targeting protein P01112. Create a team with a bioinformatician and a chemist to analyze its sequence, find existing patents, and identify similar compounds.  Ensure that  the plan to be constrained to the MCP tools (except the multi-agent tool) available to the agents.
+In addition, for steps that require code execution using python will also include code that will install required packages. 
+Moreover, the python scripts have to perform the installation within the same logic but before the required libraries are imported (e.g., use a subproccess to perform the installation). 
+Please show me the plan before proceeding.
+
+
+Updated query for multi-team, multi-agent, multi-phase workflow ostensibly employs base64 encoding/decoding scheme to transport artifacts (input and output) between steps.
+
+Create three multi-agent teams to plan and proceed with the following task that needs to proceed in multiple phases due to langgraph recursion constraints: I need a competitive analysis for a new drug candidate targeting protein P01112. Create a team with a bioinformatician and a chemist to analyze its sequence, find existing patents, and identify similar compounds.  Ensure that  the plan to be constrained to the MCP tools (except the multi-agent tool) available to the agents.
+In addition, for steps that require code execution using python will also include code that will install required packages. 
+Moreover, the python scripts have to perform the installation within the same logic but before the required libraries are imported (e.g., use a subproccess to perform the installation). 
+Lastly, instruct the workers to include some logic to print out the output or list of output in base64 such that they can be retained within the history. Then update the subsequent steps to include support to embed the base64 encoded set of input, and properly decode the base64 input. Employ the same strategy of retaining output in base64 format throughout.
+
+Please show me the plan before proceeding.
+
+****
+Draft a multi-phase plan with a dedicated multi-agent team in each. The plan will explore and use bioinformatics tools to find potential analogous drug targets such as PARP.
+
+
+***
+Draft a multi-phase plan with a dedicated multi-agent team in each. 
+
+I need a competitive analysis for a new drug candidate targeting protein P01112. Create a team with a bioinformatician and a chemist to analyze its sequence, find existing patents, and identify similar compounds.  Ensure that  the plan to be constrained to the MCP tools (except the multi-agent tool) available to the agents.
+
+In addition, for steps that require code execution using python will also include code that will install required packages. 
+Moreover, the python scripts have to perform the installation within the same logic but before the required libraries are imported (e.g., use a subproccess to perform the installation). 
+
+Lastly, instruct the workers to include some logic to print out the output or list of output in base64 such that they can be retained within the history. Then update the subsequent steps to include support to embed the base64 encoded set of input, and properly decode the base64 input. Employ the same strategy of retaining output in base64 format throughout.
+

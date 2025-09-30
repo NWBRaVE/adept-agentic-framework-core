@@ -1,0 +1,26 @@
+FROM jupyter/scipy-notebook:latest
+
+# The base image's default user is 'jovyan' (UID=1000, GID=100) with home /home/jovyan.
+# The `user:` directive in docker-compose.yaml will map your host user's UID/GID to this user at runtime.
+
+# Set the working directory. The base image's start scripts run from here.
+WORKDIR /home/jovyan/work
+
+# Copy project definition files and source code with correct ownership.
+# This is necessary for the editable install.
+COPY --chown=jovyan:users pyproject.toml uv.lock* ./
+COPY --chown=jovyan:users src/ ./src/
+COPY --chown=jovyan:users notebooks/ /home/jovyan/work/data/notebooks/
+COPY --chown=jovyan:users notebooks/sample_data.csv /home/jovyan/work/data/sample_data.csv
+COPY --chown=jovyan:users notebooks/sample_data.csv /home/jovyan/work/data/uploaded_files/sample_data.csv
+
+# Switch to the jovyan user to install packages
+USER jovyan
+
+# Install uv and project dependencies into the default conda environment.
+# This makes them available to the notebooks.
+RUN pip install --no-cache-dir uv
+RUN uv pip install --no-cache-dir --system --editable .
+
+# The notebook and data directories are mounted via docker-compose.
+# The default command from the base image will start JupyterLab in /home/jovyan/work

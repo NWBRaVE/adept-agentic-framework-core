@@ -1,0 +1,54 @@
+# Dockerfile.openwebui_app
+# Stage 1: Builder
+FROM python:3.11-slim AS builder
+
+# Create the non-root user and group
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+
+ENV HOME=/app
+WORKDIR ${HOME}
+
+# Install build essentials
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN pip install --no-cache-dir uv
+RUN uv venv -p 3.11
+
+# Copy dependency files
+COPY pyproject.toml uv.lock* .env* ./
+COPY src/ ./src/
+
+# Install dependencies
+RUN uv sync --all-extras
+RUN uv pip install --no-cache-dir --editable .
+
+# Stage 2: Final image
+FROM python:3.11-slim AS final
+
+# Create the non-root user and group
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+
+ENV HOME=/app
+WORKDIR ${HOME}
+
+# Copy the virtual environment from the builder stage
+COPY --from=builder /app/.venv ./.venv/
+# Copy the uv executable from the builder stage
+COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
+
+# Copy the application code
+COPY --from=builder /app/src/ ./src/
+COPY --from=builder /app/pyproject.toml ./
+COPY --from=builder /app/uv.lock* ./
+COPY --from=builder /app/.env ./
+
+# Set ownership and user
+RUN chown -R appuser:appgroup ${HOME}
+USER appuser
+
+# Expose the port for the OpenWebUI backend
+EXPOSE 8081
+
+# Activate the virtual environment and run the application
+CMD [".venv/bin/python", "-m", "agentic_framework_pkg.openwebui_backend.main"]

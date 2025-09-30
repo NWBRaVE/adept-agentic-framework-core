@@ -1,0 +1,77 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic_framework_pkg"
+version = "0.1.0"
+description = "A comprehensive agentic framework with MCP, Langchain, and Streamlit."
+authors = [
+  { name = "Paul Rigor", email = "paul.rigor@pnnl.gov" },
+]
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "fastmcp>=2.6.0", # Check for the latest compatible version
+    "mcp",
+    "litellm>=1.15.0", # Check for latest
+    #"langchain>=0.1.0",
+    "langchain>=0.2.43",
+    "langgraph>=0.0.8", # Added langgraph
+    "langchain-openai", 
+    "langchain-community>=0.3.25", # Check for latest!
+    "streamlit>=1.20.0",
+    "aiosqlite>=0.17.0",
+    "chromadb>=1.0.12",
+    "pandas>=1.5.0",
+    "uvicorn[standard]>=0.20.0",
+    "python-dotenv>=1.0.0",
+    "numpy>=1.20.0", # For cosine similarity in RAG
+    "fastapi", # FastMCP's streamable_http_app can be mounted in FastAPI
+    # Add other specific scientific libraries if directly used by tools, e.g.:
+    "biopython",
+    "rdkit-pypi",
+    #"pdbfixer",
+    "chembl_webresource_client",
+    "meeko",
+    #"vina", # The AutoDock Vina Python library
+    "selenium",
+    "webdriver_manager",
+    "watchdog",
+    "openai",
+    "PyMuPDF>=1.23.0",
+    "openpyxl",
+    "python-docx",
+    "pubchempy",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.20.0",
+    "pytest-mock>=3.0.0",
+    "black>=23.0.0",
+    "isort>=5.0.0",
+    "pip-audit>=2.5.0",
+]
+
+[project.scripts]
+run-mcp-server = "agentic_framework_pkg.mcp_server.main:start_server_cli"
+run-mcp-hpc-server = "agentic_framework_pkg.hpc_mcp_server.main:start_server_cli"
+run-streamlit-harness = "agentic_framework_pkg.streamlit_app.main:start_harness_cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+
+[tool.ruff]
+line-length = 88
+target-version = "py311" # Align with project's requires-python
+
+[tool.ruff.lint]
+select = ["E"] #, "F", "I", "W", "C", "N", "D", "B", "T", "S", "A", "G"] # A common set of rules
+ignore = ["E501"] # Ignore line too long

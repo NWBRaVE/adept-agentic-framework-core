@@ -1,0 +1,24 @@
+# Dockerfile.tests
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install uv
+RUN pip install uv
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential && rm -rf /var/lib/apt/lists/*
+
+# Copy dependency files and project code
+COPY pyproject.toml uv.lock ./
+COPY .env ./
+COPY ./src/ ./src/
+COPY ./tests/ ./tests/
+
+# Install dependencies
+RUN uv sync --all-extras
+
+# Install additional test dependencies
+RUN uv pip install pytest-asyncio pytest-mock redis
+
+# Set the entrypoint to run pytest
+ENTRYPOINT ["/app/.venv/bin/pytest"]
+CMD ["pytest"]

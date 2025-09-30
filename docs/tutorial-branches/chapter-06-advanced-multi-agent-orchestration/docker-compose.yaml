@@ -1,0 +1,237 @@
+# docker-compose.yml
+#version: '3.8'
+
+services:
+  vector_db_server:
+    image: chromadb/chroma
+    platform: linux/amd64
+    container_name: vector_db_server
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./data/vector_db_persistence:/chroma/data
+    command: "run --host 0.0.0.0 --port 8001 --path /chroma/data"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - agentic_network
+
+  agent_gateway:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile.agent_gateway
+    container_name: agentic_agent_gateway
+    ports:
+      - "8083:8081"
+    volumes:
+      - ./data:/app/data
+      - shared_uploads:/app/data/uploaded_files
+    environment:
+      - AGENT_GATEWAY_AUTH_ENABLED=true
+      - VECTOR_DB_URL=http://vector_db_server:8001
+      - KEYCLOAK_URL=http://keycloak:8180
+      - KEYCLOAK_REALM=master
+      - LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
+      - MCP_SERVER_URL=http://mcp_server:8080/mcp
+      - MCP_SERVER_URL_FOR_LANGCHAIN=http://mcp_server:8080/mcp
+      - HPC_MCP_SERVER_URL=http://hpc_mcp_server:8081
+      - DEFAULT_MCP_SERVER_URL_FOR_LANGCHAIN=http://mcp_server:8080/mcp
+      - HPC_MCP_SERVER_URL_FOR_LANGCHAIN=http://hpc_mcp_server:8081/mcp
+      - SANDBOX_MCP_SERVER_URL_FOR_LANGCHAIN=http://sandbox_mcp_server:8082/mcp
+      - SANDBOX_MCP_SERVER_URL=http://sandbox_mcp_server:8082/mcp
+      - VECTOR_DB_URL=http://vector_db_server:8001
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - vector_db_server
+      - keycloak
+      - mcp_server
+      - hpc_mcp_server
+      - sandbox_mcp_server
+      - redis
+    networks:
+      - agentic_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/v1/models"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  mcp_server:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp_server
+    container_name: agentic_mcp_server
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - shared_uploads:/app/data/uploaded_files
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - AZURE_API_KEY=${AZURE_API_KEY}
+      - AZURE_API_BASE=${AZURE_API_BASE}
+      - AZURE_API_VERSION=${AZURE_API_VERSION}
+      - VERTEXAI_PROJECT=${VERTEXAI_PROJECT}
+      - VERTEXAI_LOCATION=${VERTEXAI_LOCATION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION_NAME=${AWS_REGION_NAME}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - OLLAMA_API_BASE=${OLLAMA_API_BASE}
+      - AGENT_GATEWAY_AUTH_ENABLED=true
+      - MCP_SERVER_URL_FOR_LANGCHAIN=http://mcp_server:8080/mcp
+      - HPC_MCP_SERVER_URL_FOR_LANGCHAIN=http://hpc_mcp_server:8081/mcp
+      - SANDBOX_MCP_SERVER_URL_FOR_LANGCHAIN=http://sandbox_mcp_server:8082/mcp
+      - SANDBOX_MCP_SERVER_URL=http://sandbox_mcp_server:8082/mcp
+      - VECTOR_DB_URL=http://vector_db_server:8001
+      - REDIS_URL=redis://redis:6379/0
+    restart: unless-stopped
+    depends_on:
+      - vector_db_server
+      - redis
+    networks:
+      - agentic_network
+
+  streamlit_app:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit_app
+    container_name: agentic_streamlit_app
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - shared_uploads:/app/data/uploaded_files
+    env_file:
+      - .env
+    environment:
+      - USE_LOCAL_MCP=False
+      - MCP_SERVER_URL=http://mcp_server:8080/mcp
+      - MCP_SERVER_URL_FOR_LANGCHAIN=http://mcp_server:8080/mcp
+      - HPC_MCP_SERVER_URL=http://hpc_mcp_server:8081
+      - DEFAULT_MCP_SERVER_URL_FOR_LANGCHAIN=http://mcp_server:8080/mcp
+      - HPC_MCP_SERVER_URL_FOR_LANGCHAIN=http://hpc_mcp_server:8081/mcp
+      - SANDBOX_MCP_SERVER_URL_FOR_LANGCHAIN=http://sandbox_mcp_server:8082/mcp
+      - SANDBOX_MCP_SERVER_URL=http://sandbox_mcp_server:8082/mcp
+      - VECTOR_DB_URL=http://vector_db_server:8001
+      - LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - vector_db_server
+      - mcp_server
+      - hpc_mcp_server
+      - sandbox_mcp_server
+      - redis
+    restart: unless-stopped
+    networks:
+      - agentic_network
+
+  hpc_mcp_server:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile.hpc
+    container_name: agentic_hpc_mcp_server
+    ports:
+      - "${HPC_MCP_SERVER_PORT:-8081}:8081"
+    env_file:
+      - .env
+    environment:
+      - HPC_MCP_SERVER_PORT=${HPC_MCP_SERVER_PORT:-8081}
+      - LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
+      - MCP_SERVER_URL_FOR_LANGCHAIN=http://mcp_server:8080/mcp
+      - HPC_MCP_SERVER_URL_FOR_LANGCHAIN=http://mcp_server:8080/mcp
+      - SANDBOX_MCP_SERVER_URL_FOR_LANGCHAIN=http://sandbox_mcp_server:8082/mcp
+      - SANDBOX_MCP_SERVER_URL=http://sandbox_mcp_server:8082/mcp
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - AZURE_API_KEY=${AZURE_API_KEY}
+      - AZURE_API_BASE=${AZURE_API_BASE}
+      - AZURE_API_VERSION=${AZURE_API_VERSION}
+      - VERTEXAI_PROJECT=${VERTEXAI_PROJECT}
+      - VERTEXAI_LOCATION=${VERTEXAI_LOCATION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION_NAME=${AWS_REGION_NAME}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - OLLAMA_API_BASE=${OLLAMA_API_BASE}
+      - BLASTDB=/blast_databases
+      - VECTOR_DB_URL=http://vector_db_server:8001
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./blast_databases:/blast_databases
+      - ./data:/app/data
+      - shared_uploads:/app/data/uploaded_files
+    networks:
+      - agentic_network
+    restart: unless-stopped
+    depends_on:
+      - vector_db_server
+      - redis
+
+  sandbox_mcp_server:
+    platform: linux/amd64
+    build:
+      context: .
+      args:
+        APP_UID: ${DOCKER_UID:-1000}
+        APP_GID: ${DOCKER_GID_APP:-1000}
+        DOCKER_GID: ${DOCKER_GID:-999}
+      dockerfile: Dockerfile.sandbox
+    container_name: sandbox_mcp_server
+    env_file:
+      - .env
+    environment:
+      - SANDBOX_MCP_SERVER_HOST=0.0.0.0
+      - SANDBOX_MCP_SERVER_PORT=8082
+      - SANDBOX_MCP_SERVER_PUBLIC_URL=http://localhost:8082
+      - LOGGING_LEVEL=${LOGGING_LEVEL:-DEBUG}
+      - MCP_SERVER_URL_FOR_LANGCHAIN=http://mcp_server:8080/mcp
+      - HPC_MCP_SERVER_URL_FOR_LANGCHAIN=http://mcp_server:8080/mcp
+      - MCP_SERVER_URL=http://mcp_server:8080/mcp
+      - HPC_MCP_SERVER=http://mcp_server:8080/mcp
+      - VECTOR_DB_URL=http://vector_db_server:8001
+      - REDIS_URL=redis://redis:6379/0
+    privileged: true
+    ports:
+      - "8082:8082"
+    networks:
+      - agentic_network
+    volumes:
+      - ./data:/app/data
+      - shared_uploads:/app/data/uploaded_files
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - redis
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    container_name: keycloak
+    ports:
+      - "8180:8080"
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+    command: "start-dev"
+    networks:
+      - agentic_network
+    restart: unless-stopped
+    depends_on:
+      - redis
+
+volumes:
+  shared_uploads:
+    driver: local
+
+networks:
+  agentic_network:
+    driver: bridge

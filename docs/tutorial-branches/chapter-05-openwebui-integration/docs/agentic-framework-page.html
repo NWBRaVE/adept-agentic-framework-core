@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agentic Framework for Scientific Discovery</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Tech Neutral -->
+    <!-- Application Structure Plan: The SPA is designed with a top-down exploratory flow. It starts with a high-level "Hero" section (Slides 1-3) to introduce the problem and solution. The "Architecture" section (Slides 5-7) provides an interactive diagram where users can click on components to get details, which is more engaging than a static image. The "Core Components" section (Slides 8-9) uses a card-based layout for scannability. The key interaction is the "Sample Workflow" (Slide 10), a step-by-step simulation that actively demonstrates the framework's value. Finally, the "Get Started" section (Slide 11) provides actionable steps. This structure guides the user from 'what it is' to 'how it works' and finally 'how to use it', which is a more effective learning path than a linear presentation. -->
+    <!-- Visualization & Content Choices: The main "visualization" is the interactive architecture diagram, built with HTML/CSS, which is more explorable than a static image (Goal: Organize/Relationships). The Sample Workflow is another key visualization, simulating a process flow (Goal: Change/Engagement), making the abstract concept concrete. Featured Tools and Technical Features are presented as cards with icons for better information density and visual appeal (Goal: Inform/Compare). All interactions are handled with vanilla JS to keep it lightweight. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* slate-50 */
+            color: #334155; /* slate-700 */
+        }
+        .nav-link {
+            transition: color 0.2s, border-bottom-color 0.2s;
+            border-bottom: 2px solid transparent;
+        }
+        .nav-link.active, .nav-link:hover {
+            color: #0ea5e9; /* sky-500 */
+            border-bottom-color: #0ea5e9; /* sky-500 */
+        }
+        .glassmorphism {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .component-card {
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+        }
+        .component-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        .demo-step {
+            transition: all 0.5s ease-in-out;
+            border-color: transparent;
+        }
+        .demo-step.active {
+            border-color: #38bdf8; /* sky-400 */
+            transform: scale(1.05);
+            background-color: #e0f2fe; /* sky-100 */
+        }
+        .demo-step .icon {
+            transition: transform 0.5s;
+        }
+        .demo-step.active .icon {
+            transform: rotate(360deg);
+        }
+        #component-details {
+            transition: opacity 0.3s, transform 0.3s;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- Header & Navigation -->
+    <header id="header" class="sticky top-0 z-50 glassmorphism shadow-md">
+        <nav class="container mx-auto px-6 py-3 flex justify-between items-center">
+            <a href="#home" class="text-xl font-bold text-slate-800">Agentic Framework</a>
+            <div class="hidden md:flex space-x-8">
+                <a href="#architecture" class="nav-link font-medium text-slate-600 pb-1">Architecture</a>
+                <a href="#components" class="nav-link font-medium text-slate-600 pb-1">Components</a>
+                <a href="#demo" class="nav-link font-medium text-slate-600 pb-1">Sample Workflow</a>
+                <a href="#start" class="nav-link font-medium text-slate-600 pb-1">Get Started</a>
+            </div>
+             <div class="md:hidden">
+                <button id="mobile-menu-button" class="text-slate-800 focus:outline-none">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+                </button>
+            </div>
+        </nav>
+         <div id="mobile-menu" class="hidden md:hidden px-6 pb-4">
+            <a href="#architecture" class="block py-2 text-slate-600">Architecture</a>
+            <a href="#components" class="block py-2 text-slate-600">Components</a>
+            <a href="#demo" class="block py-2 text-slate-600">Sample Workflow</a>
+            <a href="#start" class="block py-2 text-slate-600">Get Started</a>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <!-- Home Section -->
+        <section id="home" class="py-20 md:py-32 bg-slate-100">
+            <div class="container mx-auto px-6 text-center">
+                <h1 class="text-4xl md:text-6xl font-bold text-slate-800 leading-tight">Agentic Framework for Scientific Discovery</h1>
+                <p class="mt-4 text-lg md:text-xl text-slate-600 max-w-3xl mx-auto">An open-source teaching tool for integrating Large Language Models with complex scientific workflows, turning manual processes into automated discoveries.</p>
+                <div class="mt-12 grid md:grid-cols-2 gap-8 max-w-4xl mx-auto text-left">
+                    <div class="bg-white p-6 rounded-lg shadow-sm">
+                        <h3 class="text-xl font-semibold text-sky-600 mb-2">The Challenge</h3>
+                        <p class="text-slate-600">Scientific research involves connecting disparate tools like BLAST, chemical databases, and data parsers—a manual, time-consuming, and error-prone process.</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm">
+                        <h3 class="text-xl font-semibold text-sky-600 mb-2">The Opportunity</h3>
+                        <p class="text-slate-600">We can leverage LLMs as intelligent "orchestrators" to automate these workflows, making research faster, more reproducible, and more accessible to a wider audience.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Architecture Section -->
+        <section id="architecture" class="py-20">
+            <div class="container mx-auto px-6">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl md:text-4xl font-bold text-slate-800">A Modular Architecture</h2>
+                    <p class="mt-4 text-lg text-slate-600 max-w-3xl mx-auto">This framework uses a decoupled, modular design that separates the user interface, agent logic, and tool execution. Click on a component below to learn more about its role in the system.</p>
+                </div>
+
+                <div class="grid md:grid-cols-3 gap-8 items-center">
+                    <!-- Left Column: UI & Agent -->
+                    <div class="space-y-6">
+                         <div id="comp-ui" class="component-card text-center p-6 bg-white rounded-lg border-2 border-slate-200">
+                            <div class="text-4xl mb-3">🖥️</div>
+                            <h3 class="text-xl font-semibold text-slate-800">User Interface</h3>
+                            <p class="text-slate-500 mt-1">The entry point for user interaction.</p>
+                        </div>
+                        <div class="flex justify-center"><div class="text-2xl text-slate-400 font-sans">↓</div></div>
+                        <div id="comp-agent" class="component-card text-center p-6 bg-white rounded-lg border-2 border-slate-200">
+                            <div class="text-4xl mb-3">🧠</div>
+                            <h3 class="text-xl font-semibold text-slate-800">Langchain Agent</h3>
+                            <p class="text-slate-500 mt-1">The "brain" that orchestrates tasks.</p>
+                        </div>
+                    </div>
+
+                    <!-- Middle Column: Details -->
+                    <div id="component-details" class="p-8 bg-sky-50 rounded-lg border-2 border-sky-200 h-full min-h-[300px] flex flex-col justify-center opacity-0 transform translate-y-4">
+                        <h4 id="details-title" class="text-2xl font-bold text-sky-800 mb-3">Select a Component</h4>
+                        <p id="details-text" class="text-sky-700">Click on any component card on the left or right to see its detailed description here.</p>
+                    </div>
+
+                    <!-- Right Column: Server & Tools -->
+                    <div class="space-y-6">
+                        <div id="comp-server" class="component-card text-center p-6 bg-white rounded-lg border-2 border-slate-200">
+                           <div class="text-4xl mb-3">⚙️</div>
+                            <h3 class="text-xl font-semibold text-slate-800">MCP Tool Server</h3>
+                            <p class="text-slate-500 mt-1">Hosts and executes tools securely.</p>
+                        </div>
+                        <div class="flex justify-center"><div class="text-2xl text-slate-400 font-sans">↓</div></div>
+                        <div id="comp-tools" class="component-card text-center p-6 bg-white rounded-lg border-2 border-slate-200">
+                            <div class="text-4xl mb-3">🛠️</div>
+                            <h3 class="text-xl font-semibold text-slate-800">Scientific Tools</h3>
+                            <p class="text-slate-500 mt-1">The individual functional units.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- Core Components Section -->
+        <section id="components" class="py-20 bg-slate-100">
+            <div class="container mx-auto px-6">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl md:text-4xl font-bold text-slate-800">Core Components & Features</h2>
+                    <p class="mt-4 text-lg text-slate-600 max-w-3xl mx-auto">The framework comes with a powerful set of pre-built integrations and technical features designed for flexibility and ease of use.</p>
+                </div>
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <!-- Featured Tool: BLAST -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                        <div class="text-3xl mb-3">🧬</div>
+                        <h3 class="text-xl font-semibold text-slate-800">Nextflow BLAST</h3>
+                        <p class="mt-2 text-slate-600">Offloads large-scale biological sequence searches to an HPC environment using a robust Nextflow pipeline.</p>
+                    </div>
+                    <!-- Featured Tool: PubChem -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                        <div class="text-3xl mb-3">🧪</div>
+                        <h3 class="text-xl font-semibold text-slate-800">PubChem Integration</h3>
+                        <p class="mt-2 text-slate-600">Connects to the PubChem API to find data on chemical compounds, structures, and properties.</p>
+                    </div>
+                    <!-- Featured Tool: RAG -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                        <div class="text-3xl mb-3">📄</div>
+                        <h3 class="text-xl font-semibold text-slate-800">Retrieval-Augmented Generation (RAG)</h3>
+                        <p class="mt-2 text-slate-600">Ingests and indexes documents (PDFs, DOCX) to let the agent answer questions based on their content.</p>
+                    </div>
+                    <!-- Technical Feature: LLM-Agnostic -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                        <div class="text-3xl mb-3">🤖</div>
+                        <h3 class="text-xl font-semibold text-slate-800">LLM-Agnostic</h3>
+                        <p class="mt-2 text-slate-600">Uses LiteLLM to support a wide range of model providers (OpenAI, Anthropic, etc.). No vendor lock-in.</p>
+                    </div>
+                    <!-- Technical Feature: Streamlit UI -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                        <div class="text-3xl mb-3">💬</div>
+                        <h3 class="text-xl font-semibold text-slate-800">Interactive UI</h3>
+                        <p class="mt-2 text-slate-600">A simple, interactive chat interface built with Streamlit for rapid development and testing.</p>
+                    </div>
+                    <!-- Technical Feature: Docker -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                        <div class="text-3xl mb-3">🐳</div>
+                        <h3 class="text-xl font-semibold text-slate-800">Reproducible Deployment</h3>
+                        <p class="mt-2 text-slate-600">Comes with Docker Compose for a one-command setup, ensuring consistency across environments.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sample Workflow Section -->
+        <section id="demo" class="py-20">
+            <div class="container mx-auto px-6">
+                <div class="text-center mb-16">
+                    <h2 class="text-3xl md:text-4xl font-bold text-slate-800">Workflow in Action</h2>
+                    <p class="mt-4 text-lg text-slate-600 max-w-3xl mx-auto">See how the agent automates a multi-step scientific query. Press "Start Demo" to watch the agent select and execute tools in sequence.</p>
+                </div>
+
+                <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg">
+                    <div class="mb-6 border-b pb-4">
+                        <p class="font-mono text-slate-500">USER QUERY:</p>
+                        <p id="demo-query" class="text-lg font-medium text-slate-800">"Find human proteins similar to sequence XYZ, then find chemical compounds known to interact with the top result."</p>
+                    </div>
+                    
+                    <div id="demo-steps-container" class="space-y-4">
+                        <!-- Steps will be injected here by JS -->
+                    </div>
+
+                    <div id="demo-result" class="mt-6 p-4 bg-green-50 text-green-800 rounded-lg border border-green-200 hidden">
+                        <h4 class="font-bold">✓ Synthesis Complete</h4>
+                        <p id="demo-result-text"></p>
+                    </div>
+                    
+                    <div class="mt-8 text-center">
+                        <button id="demo-button" class="bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-8 rounded-lg transition-colors">Start Demo</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Get Started Section -->
+        <section id="start" class="py-20 bg-slate-100">
+            <div class="container mx-auto px-6">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl md:text-4xl font-bold text-slate-800">Get Started in Three Steps</h2>
+                    <p class="mt-4 text-lg text-slate-600 max-w-3xl mx-auto">It's easy to get the framework running on your own machine with Docker. For a detailed guide on adding new tools, refer to the full tutorial in the repository.</p>
+                </div>
+                <div class="max-w-2xl mx-auto space-y-8">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 bg-sky-500 text-white w-10 h-10 rounded-full flex items-center justify-center font-bold text-xl">1</div>
+                        <div class="ml-4">
+                            <h3 class="text-xl font-semibold">Clone the Repository</h3>
+                            <p class="text-slate-600">Get the source code on your local machine.</p>
+                            <div class="mt-2 bg-slate-800 text-slate-200 p-3 rounded-md font-mono text-sm relative">
+                                <span>git clone https://tanuki.pnnl.gov/cloudhub/agentic-framework.git</span>
+                                <button class="copy-btn absolute top-2 right-2 bg-slate-600 hover:bg-slate-500 text-white px-2 py-1 rounded text-xs">Copy</button>
+                            </div>
+                        </div>
+                    </div>
+                     <div class="flex items-start">
+                        <div class="flex-shrink-0 bg-sky-500 text-white w-10 h-10 rounded-full flex items-center justify-center font-bold text-xl">2</div>
+                        <div class="ml-4">
+                            <h3 class="text-xl font-semibold">Configure Environment</h3>
+                            <p class="text-slate-600">Copy the example .env file and add your LLM API keys.</p>
+                             <div class="mt-2 bg-slate-800 text-slate-200 p-3 rounded-md font-mono text-sm relative">
+                                <span>cp .env.example .env</span>
+                                <button class="copy-btn absolute top-2 right-2 bg-slate-600 hover:bg-slate-500 text-white px-2 py-1 rounded text-xs">Copy</button>
+                            </div>
+                        </div>
+                    </div>
+                     <div class="flex items-start">
+                        <div class="flex-shrink-0 bg-sky-500 text-white w-10 h-10 rounded-full flex items-center justify-center font-bold text-xl">3</div>
+                        <div class="ml-4">
+                            <h3 class="text-xl font-semibold">Build and Run</h3>
+                            <p class="text-slate-600">Use Docker Compose to build the images and launch the containers.</p>
+                             <div class="mt-2 bg-slate-800 text-slate-200 p-3 rounded-md font-mono text-sm relative">
+                                <span>docker compose up --build -d</span>
+                                <button class="copy-btn absolute top-2 right-2 bg-slate-600 hover:bg-slate-500 text-white px-2 py-1 rounded text-xs">Copy</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-800 text-slate-400 py-8">
+        <div class="container mx-auto px-6 text-center">
+            <p>&copy; 2025 Agentic Framework Project. An educational resource.</p>
+            <p class="text-sm mt-2">This interactive experience was generated to demonstrate the framework's concepts.</p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Mobile Menu
+            const mobileMenuButton = document.getElementById('mobile-menu-button');
+            const mobileMenu = document.getElementById('mobile-menu');
+            mobileMenuButton.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+            });
+
+            // Navigation Active State
+            const sections = document.querySelectorAll('section');
+            const navLinks = document.querySelectorAll('.nav-link');
+            
+            window.addEventListener('scroll', () => {
+                let current = '';
+                sections.forEach(section => {
+                    const sectionTop = section.offsetTop;
+                    if (pageYOffset >= sectionTop - 68) { // 68px is header height
+                        current = section.getAttribute('id');
+                    }
+                });
+
+                navLinks.forEach(link => {
+                    link.classList.remove('active');
+                    if (link.getAttribute('href').substring(1) === current) {
+                        link.classList.add('active');
+                    }
+                });
+            });
+
+            // Architecture Component Interaction
+            const componentCards = document.querySelectorAll('.component-card');
+            const detailsContainer = document.getElementById('component-details');
+            const detailsTitle = document.getElementById('details-title');
+            const detailsText = document.getElementById('details-text');
+
+            const componentData = {
+                'comp-ui': {
+                    title: '🖥️ User Interface',
+                    text: 'Built with Streamlit, this is the primary frontend for user interaction. It provides a chat interface to communicate with the agent and can invoke tools directly for testing.'
+                },
+                'comp-agent': {
+                    title: '🧠 Langchain Agent',
+                    text: 'The "brain" of the application. It uses Langchain and an LLM to understand queries, reason about which tools to use, and orchestrate the workflow from start to finish.'
+                },
+                'comp-server': {
+                    title: '⚙️ MCP Tool Server',
+                    text: 'A dedicated server that hosts and exposes tools over the Multi-Component Protocol (MCP). It decouples tools from the agent, allowing them to be maintained independently.'
+                },
+                'comp-tools': {
+                    title: '🛠️ Scientific Tools',
+                    text: 'Modular Python scripts that implement specific functions like BLAST, PubChem queries, or RAG. Each tool is registered with the MCP server and can be invoked remotely.'
+                }
+            };
+
+            componentCards.forEach(card => {
+                card.addEventListener('click', () => {
+                    const compId = card.id;
+                    const data = componentData[compId];
+
+                    // Reset all cards
+                    componentCards.forEach(c => c.classList.remove('border-sky-400', 'bg-sky-50'));
+                    
+                    // Highlight selected card
+                    card.classList.add('border-sky-400', 'bg-sky-50');
+
+                    detailsContainer.classList.remove('opacity-0', 'translate-y-4');
+                    detailsTitle.textContent = data.title;
+                    detailsText.textContent = data.text;
+                });
+            });
+            
+            // Copy to Clipboard
+            document.querySelectorAll('.copy-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const textToCopy = button.previousElementSibling.textContent;
+                    const tempTextarea = document.createElement('textarea');
+                    tempTextarea.value = textToCopy;
+                    document.body.appendChild(tempTextarea);
+                    tempTextarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(tempTextarea);
+
+                    button.textContent = 'Copied!';
+                    setTimeout(() => {
+                        button.textContent = 'Copy';
+                    }, 2000);
+                });
+            });
+
+
+            // Sample Workflow Logic
+            const demoButton = document.getElementById('demo-button');
+            const demoStepsContainer = document.getElementById('demo-steps-container');
+            const demoResult = document.getElementById('demo-result');
+            const demoResultText = document.getElementById('demo-result-text');
+
+            const steps = [
+                {
+                    icon: '📄',
+                    title: 'Agent uses RAG Tool',
+                    tool: 'Finds "human KRAS protein (P01112)" in an uploaded paper.'
+                },
+                {
+                    icon: '🌐',
+                    title: 'Agent uses UniProt Tool',
+                    tool: 'Fetches the FASTA sequence for accession P01112.'
+                },
+                {
+                    icon: '🧬',
+                    title: 'Agent uses Nextflow BLAST Tool',
+                    tool: 'Sends sequence to HPC server for a large-scale search.'
+                },
+                {
+                    icon: '🧪',
+                    title: 'Agent uses PubChem Tool',
+                    tool: 'Searches for "KRAS inhibitor" compounds.'
+                },
+                {
+                    icon: '💡',
+                    title: 'Agent Synthesizes Final Answer',
+                    tool: 'Combines all findings into a comprehensive summary.'
+                }
+            ];
+            
+            function resetDemo() {
+                demoStepsContainer.innerHTML = '';
+                steps.forEach((step, index) => {
+                    demoStepsContainer.innerHTML += `
+                        <div id="demo-step-${index}" class="demo-step flex items-center p-4 rounded-lg border-2">
+                            <div class="icon text-2xl mr-4">${step.icon}</div>
+                            <div>
+                                <p class="font-semibold text-slate-700">${step.title}</p>
+                                <p class="text-sm text-slate-500">${step.tool}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+                document.getElementById('demo-query').textContent = `Based on the uploaded paper, find the protein sequence, run a large-scale similarity search, and find any known chemical inhibitors.`;
+                demoResult.classList.add('hidden');
+                demoButton.textContent = 'Start Demo';
+                demoButton.disabled = false;
+            }
+
+            demoButton.addEventListener('click', () => {
+                demoButton.disabled = true;
+                demoButton.textContent = 'Running...';
+                resetDemo();
+                demoResult.classList.add('hidden');
+
+                let currentStep = 0;
+                const interval = setInterval(() => {
+                    if (currentStep > 0) {
+                        document.getElementById(`demo-step-${currentStep - 1}`).classList.remove('active');
+                    }
+                    if (currentStep < steps.length) {
+                        document.getElementById(`demo-step-${currentStep}`).classList.add('active');
+                        currentStep++;
+                    } else {
+                        clearInterval(interval);
+                        document.getElementById(`demo-step-${steps.length - 1}`).classList.remove('active');
+                        demoResultText.textContent = "The agent identified KRAS (P01112) from the paper, found its sequence via UniProt, ran a BLAST search, and discovered related inhibitors like Adagrasib from PubChem.";
+                        demoResult.classList.remove('hidden');
+                        demoButton.textContent = 'Run Again';
+                        demoButton.disabled = false;
+                    }
+                }, 1500);
+            });
+
+            // Initialize Demo
+            resetDemo();
+        });
+    </script>
+</body>
+</html>
